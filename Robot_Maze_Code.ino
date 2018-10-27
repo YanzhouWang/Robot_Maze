@@ -1,22 +1,20 @@
 #include <SD.h>
 #include <XBee.h>
 
+
 File recordings;
 File analysis;
 const int chipSelect = 10;
 XBee xbee = XBee();
 XBeeResponse response = XBeeResponse();
 Rx16Response rx16 = Rx16Response();
-uint8_t cmd{};                              //Direction data
-char cmds {};                     //Variable length array to store retrieved data from SD card
-
 
 int motor1F = 3;
 int motor1B = 5;
 int motor2F = 6;
 int motor2B = 9;
-double speed = 255;
-double turnTime = 1000; //motor turning time; subject to wheel specifications
+int speed = 255;
+int turnTime = 1000; //motor turning time; subject to wheel specifications
 
 
 void setup() {
@@ -54,8 +52,7 @@ void setup() {
   pinMode(motor2B, OUTPUT);
   //Motor Setup End//
 
-  Serial.println("Initialization done.");
-  Serial.println("Ready!");
+  Serial.println("Initialization done. Ready!");
 }
 
 void Forward() {
@@ -97,6 +94,7 @@ void Right() {
 void Record() {
   //only runs when the file is open and ready to write
   while (recordings) {
+    uint8_t cmd{};                              //Direction data
     xbee.readPacket(1000); //wait 1s for response
     // reply only when you receive data:
     if (xbee.getResponse().isAvailable() &&  xbee.getResponse().getApiId() == RX_16_RESPONSE) {
@@ -133,32 +131,62 @@ void Record() {
   }
 }
 
-void Read() {
-  recordings = SD.open("record.txt", FILE_READ);
-  if (recordings) {
-    Serial.println("Start Reading...");
-    int i = 0;
-    while ((cmds = recordings.read()) != -1) {
-      Serial.println(cmds);
-      i++;
+void Analyze() {
+  analysis = SD.open("record.txt", FILE_READ);
+  char cmds{};                     //a variable to temporarily store one direction value from the recordings file
+  uint8_t numcmds{0};                //number of commands recorded
+  if (analysis) {
+    Serial.println("Start Analyzing...");
+    while ((cmds = analysis.read()) != -1) {
+      Serial.print(cmds);                     //or Serial.println((int)cmds-48), or better, Serial.println(cmds-'0')
+      numcmds++;                              //getting the number of commands recorded
     }
-    recordings.close();
-    Serial.println("DONE READING!");
-    Serial.println(sizeof(cmds));
+    analysis.close();                         //for some reason we need to close the file immediately before we perform any other tasks
+
+    Serial.println("");
+    Serial.print("Number of commands: ");
+    Serial.println(numcmds);
+    //size and populate the direction and distance arrays with raw data
+    int cmd_list[numcmds] {};
+    int dist_list[numcmds] {};
+    uint8_t counter = 0;
+
+    analysis = SD.open("record.txt", FILE_READ);    //reopen this file for further processing
+    if (analysis) {
+      Serial.println("Stuffing arrays...");
+
+      while ((cmds = analysis.read()) != -1) {
+        cmd_list[counter] = cmds - '0';
+        //Serial.print(cmd_list[counter]);
+        dist_list[counter] = turnTime;
+        //Serial.println(dist_list[counter]);
+        counter += 1;
+      }
+    }
+    analysis.close();//done with file record.txt
+
+    //CODE FOR OPTIMIZATION//
+    Serial.println("Optimizing");
+    //xxxxxxxxxxxxxxxxxxxxx//
+
+    analysis = SD.open("analysis.txt", FILE_WRITE);
+    if (analysis) {
+      Serial.println("WRITING analysis.txt");
+      for (int i = 0; i < numcmds; i++) {
+        analysis.print(cmd_list[i]);
+        analysis.println(dist_list[i]);
+      }
+      analysis.close();
+    }
   }
 }
 
-void Analyze() {
-  Serial.println("START ANALYZING");
-  analysis = SD.open("analysis.txt", FILE_WRITE);
-  //Read the characters from the file one by one, then counter++, therefore we can know the size of the vector for further analysis.
-}
+
 
 
 
 void loop() {
   Record();
-  Read();
   Analyze();
   Serial.println("Oops");
   delay(5000);
