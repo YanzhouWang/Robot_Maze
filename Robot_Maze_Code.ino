@@ -1,12 +1,14 @@
 #include <SD.h>
 #include <XBee.h>
 
-File myFile;
+File recordings;
+File analysis;
 const int chipSelect = 10;
 XBee xbee = XBee();
 XBeeResponse response = XBeeResponse();
 Rx16Response rx16 = Rx16Response();
-uint8_t dir{};                              //Direction data
+uint8_t cmd{};                              //Direction data
+char cmds {};                     //Variable length array to store retrieved data from SD card
 
 
 int motor1F = 3;
@@ -24,14 +26,20 @@ void setup() {
   Serial.print("Initializing SD card...");
   pinMode(chipSelect, OUTPUT);
 
-  if (!SD.begin(chipSelect)) {
-    Serial.println("initialization failed!");
-    return;
+  while (!SD.begin(chipSelect)) { //keep trying to connect to SD card until success
+    Serial.println("SD card initialization failed!");
+    delay(2000);
   }
-  if (SD.exists("a.txt")) {
-    SD.remove("a.txt");
+  //if there exists an old analyzed file (analyzed.txt), skip the recording; otherwise,
+  //remove the old recordings and start a new one.
+  if (!SD.exists("analysis.txt")) {
+    SD.remove("record.txt");
+    Serial.println("Removed old record. Setting up recording environment.");
+    recordings = SD.open("record.txt", FILE_WRITE);//having recordings open will lead the main program into Record() function
   }
-  myFile = SD.open("a.txt", FILE_WRITE);
+  else {
+    Serial.println("analysis.txt exists. Skip Recording.");
+  }
   //SD Card Setup End//
 
 
@@ -46,7 +54,7 @@ void setup() {
   pinMode(motor2B, OUTPUT);
   //Motor Setup End//
 
-  Serial.println("initialization done.");
+  Serial.println("Initialization done.");
   Serial.println("Ready!");
 }
 
@@ -88,48 +96,71 @@ void Right() {
 
 void Record() {
   //only runs when the file is open and ready to write
-  while (myFile) {
+  while (recordings) {
     xbee.readPacket(1000); //wait 1s for response
     // reply only when you receive data:
     if (xbee.getResponse().isAvailable() &&  xbee.getResponse().getApiId() == RX_16_RESPONSE) {
 
       xbee.getResponse().getRx16Response(rx16);
-      dir = rx16.getData(0);
-      if (dir == 1) {
-        Serial.println(dir);
+      cmd = rx16.getData(0);
+      if (cmd == 1) {
+        Serial.println(cmd);
         Forward();
-        myFile.write("1");
+        recordings.write("1");
       }
-      else if (dir == 3) {
-        Serial.println(dir);
+      else if (cmd == 3) {
+        Serial.println(cmd);
         Left();
-        myFile.write("3");
+        recordings.write("3");
 
       }
-      else if (dir == 5) {
-        Serial.println(dir);
+      else if (cmd == 5) {
+        Serial.println(cmd);
         Right();
-        myFile.write("5");
+        recordings.write("5");
 
       }
-      else if (dir == 7) {
-        Serial.println(dir);
+      else if (cmd == 7) {
+        Serial.println(cmd);
         Backward();
-        myFile.write("7");
+        recordings.write("7");
       }
-      else if (dir == 4) {
-        myFile.close(); //close file after it's done; avoid re-entering Record function.
+      else if (cmd == 4) {
+        recordings.close(); //close file after it's done; avoid re-entering Record function.
         Serial.println("DONE RECORDING!");
       }
     }
   }
 }
 
+void Read() {
+  recordings = SD.open("record.txt", FILE_READ);
+  if (recordings) {
+    Serial.println("Start Reading...");
+    int i = 0;
+    while ((cmds = recordings.read()) != -1) {
+      Serial.println(cmds);
+      i++;
+    }
+    recordings.close();
+    Serial.println("DONE READING!");
+    Serial.println(sizeof(cmds));
+  }
+}
+
+void Analyze() {
+  Serial.println("START ANALYZING");
+  analysis = SD.open("analysis.txt", FILE_WRITE);
+  //Read the characters from the file one by one, then counter++, therefore we can know the size of the vector for further analysis.
+}
 
 
 
 void loop() {
   Record();
+  Read();
+  Analyze();
   Serial.println("Oops");
+  delay(5000);
 
 }
