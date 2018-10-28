@@ -16,10 +16,10 @@ int motor2B = 9;
 int speed = 255;
 int turnTime = 1000; //motor turning time; subject to wheel specifications
 //direction signals, depending on the controller setting
-uint8_t go_Forward=5;
-uint8_t go_Backward=1;
-uint8_t go_Left=3;
-uint8_t go_Right=7;
+uint8_t go_Forward = 5;
+uint8_t go_Backward = 1;
+uint8_t go_Left = 3;
+uint8_t go_Right = 7;
 
 
 bool overall = true; //for debugging
@@ -191,20 +191,25 @@ void Analyze() {
     }
     analysis.close();//done with file record.txt
 
-    //CODE FOR OPTIMIZATION//
-    Serial.println("Optimizing");
+
     //changing the recorded values to +1(Forward),-1(Backward),+2(Left),-2(Right) to match my C++ code
-    for(int i=0;i<counter;i++){
-      if(cmd_list[i]==go_Forward){
-        cmd_list[i]=+1;}
-        else if(cmd_list[i]==go_Left){
-          cmd_list[i]=+2;}
-          else if (cmd_list[i]==go_Right){
-            cmd_list[i]=-2;}
-            else if(cmd_list[i]==go_Backward){
-              cmd_list[i]=-1;}
+    for (int i = 0; i < counter; i++) {
+      if (cmd_list[i] == go_Forward) {
+        cmd_list[i] = +1;
       }
-    
+      else if (cmd_list[i] == go_Left) {
+        cmd_list[i] = +2;
+      }
+      else if (cmd_list[i] == go_Right) {
+        cmd_list[i] = -2;
+      }
+      else if (cmd_list[i] == go_Backward) {
+        cmd_list[i] = -1;
+      }
+    }
+
+    //CODE FOR OPTIMIZATION//
+    Serial.println("Optimizing......");
     bool finish{false};
     while (!finish) {
       for (int i = 0; i < counter - 1; ++i) {
@@ -221,13 +226,50 @@ void Analyze() {
           finish = true;
         }
       }
+      for (int j = 0; j < counter - 1; ++j) {
+        while (cmd_list[j] == -cmd_list[j + 1] && cmd_list[j] != 0) {
+          finish = false;
+          if (dist_list[j] > dist_list[j + 1]) {
+            dist_list[j] = dist_list[j] - dist_list[j + 1];
+            cmd_list[j + 1] = 0;
+            dist_list[j + 1] = 0;
+            pushZerosToEnd(cmd_list, counter);
+            pushZerosToEnd(dist_list, counter);
+            j--;
+          }
+          else if (dist_list[j] < dist_list[j + 1]) {
+            dist_list[j + 1] = dist_list[j + 1] - dist_list[j];
+            cmd_list[j] = 0;
+            dist_list[j] = 0;
+            pushZerosToEnd(cmd_list, counter);
+            pushZerosToEnd(dist_list, counter);
+            j--;
+          }
+          else if (dist_list[j] == dist_list[j + 1]) {
+            cmd_list[j] = 0;
+            cmd_list[j + 1] = 0;
+            dist_list[j] = 0;
+            dist_list[j + 1] = 0;
+            pushZerosToEnd(cmd_list, counter);
+            pushZerosToEnd(dist_list, counter);
+            j--;
+          }
+
+        }
+        //else {
+          finish = true;
+       // }
+      }
+      if (counter == 1) {
+        finish = true;
+      }
     }
     //xxxxxxxxxxxxxxxxxxxxx//
 
     analysis = SD.open("analysis.txt", FILE_WRITE);
     if (analysis) {
-      Serial.println("WRITING analysis.txt");
-      for (int i = 0; i < numcmds; i++) {
+      Serial.println("WRITING analysis.txt....");
+      for (int i = 0; i < numcmds && cmd_list[i] != 0; i++) {
         analysis.print(cmd_list[i]);
         analysis.print("   "); //for debugging
         analysis.println(dist_list[i]);
