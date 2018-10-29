@@ -1,29 +1,69 @@
 #include <SD.h>
 #include <XBee.h>
+#include <avr/pgmspace.h>
 
 
 File recordings;
 File analysis;
 File execute;
-const int chipSelect = 10;
+const unsigned char chipSelect = 10;
 XBee xbee = XBee();
 XBeeResponse response = XBeeResponse();
 Rx16Response rx16 = Rx16Response();
 
-int motor1F = 3;
-int motor1B = 5;
-int motor2F = 6;
-int motor2B = 9;
-int speed = 255;
+const unsigned char motor1F = 3;
+const unsigned char motor1B = 5;
+const unsigned char motor2F = 6;
+const unsigned char motor2B = 9;
+const unsigned char speed = 255;
 int turnTime = 1000; //motor turning time; subject to wheel specifications
 //direction signals, depending on the controller setting
-uint8_t go_Forward = 5;
-uint8_t go_Backward = 1;
-uint8_t go_Left = 3;
-uint8_t go_Right = 7;
+const unsigned char go_Forward = 5;
+const unsigned char go_Backward = 1;
+const unsigned char go_Left = 3;
+const unsigned char go_Right = 7;
 
 bool analyzed = false; //don't re-analyze previously analyzed data
 
+void setup() {
+  Serial.begin(9600); // opens serial port, sets data rate to 9600 bps
+
+  //SD Card Setup Begin//
+  Serial.print(F("Initializing SD card..."));
+  pinMode(chipSelect, OUTPUT);
+
+  while (!SD.begin(chipSelect)) { //keep trying to connect to SD card until success
+    Serial.println(F("SD card initialization failed!"));
+    delay(2000);
+  }
+  //if there exists an old analyzed file (analyzed.txt), skip the recording; otherwise,
+  //remove the old recordings and start a new one.
+  if (!SD.exists("analysis.txt")) {
+    SD.remove("record.txt");
+    Serial.println(F("Removed old record. Setting up recording environment."));
+    recordings = SD.open("record.txt", FILE_WRITE);//having recordings open will lead the main program into Record() function
+  }
+  else {
+    analyzed = true;
+    Serial.println(F("analysis.txt exists."));
+    Serial.println(F("Skip Recording and Analyze. Going to Execute."));
+  }
+  //SD Card Setup End//
+
+
+  //XBee Setup Begin//
+  xbee.setSerial(Serial);
+  //XBee Setup End//
+
+  //Motor Setup Begin//
+  pinMode(motor1F, OUTPUT);
+  pinMode(motor1B, OUTPUT);
+  pinMode(motor2F, OUTPUT);
+  pinMode(motor2B, OUTPUT);
+  //Motor Setup End//
+
+  Serial.println(F("Initialization done. Ready!"));
+}
 
 //Function to extract values from the optimized analysis.txt. Takes the direction and duration
 //values separated by delimiter ',', and put the values in an array for execution
@@ -40,7 +80,7 @@ bool readLine(File &f, char* line, size_t maxLen) {
   return false; // line too long
 }
 
-bool readVals(int* v1, int* v2) {
+bool readVals(unsigned char* v1, unsigned char* v2) {
   char line[40], *ptr, *str;
   if (!readLine(execute, line, sizeof(line))) {
     return false;  // EOF or too long
@@ -56,48 +96,7 @@ bool readVals(int* v1, int* v2) {
 
 //Function ends
 
-
-void setup() {
-  Serial.begin(9600); // opens serial port, sets data rate to 9600 bps
-
-  //SD Card Setup Begin//
-  Serial.print("Initializing SD card...");
-  pinMode(chipSelect, OUTPUT);
-
-  while (!SD.begin(chipSelect)) { //keep trying to connect to SD card until success
-    Serial.println("SD card initialization failed!");
-    delay(2000);
-  }
-  //if there exists an old analyzed file (analyzed.txt), skip the recording; otherwise,
-  //remove the old recordings and start a new one.
-  if (!SD.exists("analysis.txt")) {
-    SD.remove("record.txt");
-    Serial.println("Removed old record. Setting up recording environment.");
-    recordings = SD.open("record.txt", FILE_WRITE);//having recordings open will lead the main program into Record() function
-  }
-  else {
-    analyzed = true;
-    Serial.println("analysis.txt exists.");
-    Serial.println("Skip Recording and Analyze. Going to Execute.");
-  }
-  //SD Card Setup End//
-
-
-  //XBee Setup Begin//
-  xbee.setSerial(Serial);
-  //XBee Setup End//
-
-  //Motor Setup Begin//
-  pinMode(motor1F, OUTPUT);
-  pinMode(motor1B, OUTPUT);
-  pinMode(motor2F, OUTPUT);
-  pinMode(motor2B, OUTPUT);
-  //Motor Setup End//
-
-  Serial.println("Initialization done. Ready!");
-}
-
-void Forward(int duration) {
+void Forward(unsigned int duration) {
   analogWrite(motor1F, speed);
   analogWrite(motor2F, speed);
   delay(duration);
@@ -106,7 +105,7 @@ void Forward(int duration) {
   delay(500);
 }
 
-void Backward(int duration) {
+void Backward(unsigned int duration) {
   analogWrite(motor1B, speed);
   analogWrite(motor2B, speed);
   delay(duration);
@@ -115,7 +114,7 @@ void Backward(int duration) {
   delay(500);
 }
 
-void Left(int duration) {
+void Left(unsigned int duration) {
   analogWrite(motor1F, speed);
   analogWrite(motor2B, speed);
   delay(duration);
@@ -124,7 +123,7 @@ void Left(int duration) {
   delay(500);
 }
 
-void Right(int duration) {
+void Right(unsigned int duration) {
   analogWrite(motor1B, speed);
   analogWrite(motor2F, speed);
   delay(duration);
@@ -133,7 +132,7 @@ void Right(int duration) {
   delay(500);
 }
 
-void pushZerosToEnd(int arr[], int n)
+void pushZerosToEnd(char arr[], int n)
 {
   int count = 0;  // Count of non-zero elements
 
@@ -186,7 +185,7 @@ void Record() {
       }
       else if (cmd == 4) {
         recordings.close(); //close file after it's done; avoid re-entering Record() function.
-        Serial.println("DONE RECORDING!");
+        Serial.println(F("DONE RECORDING!"));
       }
     }
   }
@@ -197,7 +196,7 @@ void Analyze() {
   char cmds{};                     //a variable to temporarily store one direction value from the recordings file
   uint8_t numcmds{0};                //number of commands recorded
   if (analysis) {
-    Serial.println("Start Analyzing...");
+    Serial.println(F("Start Analyzing..."));
     while ((cmds = analysis.read()) != -1) {
       Serial.print(cmds);                     //or Serial.println((int)cmds-48), or better, Serial.println(cmds-'0')
       numcmds++;                              //getting the number of commands recorded
@@ -205,16 +204,16 @@ void Analyze() {
     analysis.close();                         //for some reason we need to close the file immediately before we perform any other tasks
 
     Serial.println("");
-    Serial.print("Number of commands: ");
+    Serial.print(F("Number of commands: "));
     Serial.println(numcmds);
     //size and populate the direction and distance arrays with raw data
-    int cmd_list[numcmds] {};
-    int dura_list[numcmds] {};
+    signed char cmd_list[numcmds] {};
+    unsigned char dura_list[numcmds] {};
     uint8_t counter{0};
     //reopen this file for further processing
     analysis = SD.open("record.txt", FILE_READ);
     if (analysis) {
-      Serial.println("Stuffing arrays...");
+      Serial.println(F("Stuffing arrays..."));
 
       while ((cmds = analysis.read()) != -1) {
         cmd_list[counter] = cmds - '0';
@@ -243,7 +242,7 @@ void Analyze() {
     }
 
     //CODE FOR OPTIMIZATION//
-    Serial.println("Optimizing......");
+    Serial.println(F("Optimizing......"));
     bool finish{false};
     while (!finish) {
       //Same-direction optimization
@@ -321,7 +320,7 @@ void Analyze() {
 
     analysis = SD.open("analysis.txt", FILE_WRITE);
     if (analysis && !analyzed) {
-      Serial.println("WRITING analysis.txt....");
+      Serial.println(F("WRITING analysis.txt...."));
       for (int i = 0; i < numcmds && cmd_list[i] != 0; i++) {
         //write an cmd_list item followed immediately by its value
         //ignoring 0 values
@@ -330,7 +329,7 @@ void Analyze() {
         analysis.println(dura_list[i]);
       }
       analysis.close();
-      Serial.println("DONE!");
+      Serial.println(F("DONE!"));
       analyzed = true;
       delay(1000);
     }
@@ -339,36 +338,36 @@ void Analyze() {
 
 void Execute() {
   //modified from File_Read Arduino code//
-  int x, y;
+  unsigned char x, y;
   execute = SD.open("analysis.txt", FILE_READ);
   if (execute) {
     while (readVals(&x, &y)) {
       if (x == go_Forward) {
-        Serial.print("Forward for ");
+        Serial.print(F("Forward for "));
         Serial.println(y * turnTime);
         Forward(y * turnTime);
       }
       else if (x == go_Backward) {
 
-        Serial.print("Backward for ");
+        Serial.print(F("Backward for "));
         Serial.println(y * turnTime);
         Backward(y * turnTime);
       }
       else if (x == go_Left) {
 
-        Serial.print("Left for ");
+        Serial.print(F("Left for "));
         Serial.println(y * turnTime);
         Left(y * turnTime);
       }
       else if (x == go_Right) {
-        Serial.print("Right for ");
+        Serial.print(F("Right for "));
         Serial.println(y * turnTime);
         Right(y * turnTime);
       }
     }
   }
   execute.close();
-  Serial.println("DONE!!");
+  Serial.println(F("DONE!!"));
 }
 
 void loop() {
@@ -377,7 +376,7 @@ void loop() {
     Analyze();
   }
   Execute();
-  Serial.println(".................end of line.................");
+  Serial.println(F(".................end of line................."));
   delay(5000);
 
 }
