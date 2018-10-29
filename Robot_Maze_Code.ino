@@ -4,6 +4,7 @@
 
 File recordings;
 File analysis;
+File execute;
 const int chipSelect = 10;
 XBee xbee = XBee();
 XBeeResponse response = XBeeResponse();
@@ -21,8 +22,40 @@ uint8_t go_Backward = 1;
 uint8_t go_Left = 3;
 uint8_t go_Right = 7;
 
+bool analyzed = false; //don't re-analyze previously analyzed data
 
-bool overall = true; //for debugging
+
+//Function to extract values from the optimized analysis.txt. Takes the direction and duration
+//values separated by delimiter ',', and put the values in an array for execution
+bool readLine(File &f, char* line, size_t maxLen) {
+  for (size_t n = 0; n < maxLen; n++) {
+    int c = f.read();
+    if ( c < 0 && n == 0) return false;  // EOF
+    if (c < 0 || c == '\n') {
+      line[n] = 0;
+      return true;
+    }
+    line[n] = c;
+  }
+  return false; // line too long
+}
+
+bool readVals(int* v1, int* v2) {
+  char line[40], *ptr, *str;
+  if (!readLine(execute, line, sizeof(line))) {
+    return false;  // EOF or too long
+  }
+  *v1 = strtol(line, &ptr, 10);
+  if (ptr == line) return false;  // bad number if equal
+  while (*ptr) {
+    if (*ptr++ == ',') break;
+  }
+  *v2 = strtol(ptr, &str, 10);
+  return str != ptr;  // true if number found
+}
+
+//Function ends
+
 
 void setup() {
   Serial.begin(9600); // opens serial port, sets data rate to 9600 bps
@@ -43,7 +76,9 @@ void setup() {
     recordings = SD.open("record.txt", FILE_WRITE);//having recordings open will lead the main program into Record() function
   }
   else {
-    Serial.println("analysis.txt exists. Skip Recording.");
+    analyzed = true;
+    Serial.println("analysis.txt exists.");
+    Serial.println("Skip Recording and Analyze. Going to Execute.");
   }
   //SD Card Setup End//
 
@@ -62,37 +97,37 @@ void setup() {
   Serial.println("Initialization done. Ready!");
 }
 
-void Forward() {
+void Forward(int duration) {
   analogWrite(motor1F, speed);
   analogWrite(motor2F, speed);
-  delay(turnTime);
+  delay(duration);
   analogWrite(motor1F, LOW);
   analogWrite(motor2F, LOW);
   delay(500);
 }
 
-void Backward() {
+void Backward(int duration) {
   analogWrite(motor1B, speed);
   analogWrite(motor2B, speed);
-  delay(turnTime);
+  delay(duration);
   analogWrite(motor1B, LOW);
   analogWrite(motor2B, LOW);
   delay(500);
 }
 
-void Left() {
+void Left(int duration) {
   analogWrite(motor1F, speed);
   analogWrite(motor2B, speed);
-  delay(turnTime);
+  delay(duration);
   analogWrite(motor1F, LOW);
   analogWrite(motor2B, LOW);
   delay(500);
 }
 
-void Right() {
+void Right(int duration) {
   analogWrite(motor1B, speed);
   analogWrite(motor2F, speed);
-  delay(turnTime);
+  delay(duration);
   analogWrite(motor1B, LOW);
   analogWrite(motor2F, LOW);
   delay(500);
@@ -129,28 +164,28 @@ void Record() {
       cmd = rx16.getData(0);
       if (cmd == go_Forward) {
         Serial.println(cmd);
-        Forward();
-        recordings.write("5");  //*Match me*//
+        Forward(turnTime);
+        recordings.write('5');  //*Match me*//
       }
       else if (cmd == go_Left) {
         Serial.println(cmd);
-        Left();
-        recordings.write("3");  //*Match me*//
+        Left(turnTime);
+        recordings.write('3');  //*Match me*//
 
       }
       else if (cmd == go_Right) {
         Serial.println(cmd);
-        Right();
-        recordings.write("7");  //*Match me*//
+        Right(turnTime);
+        recordings.write('7');  //*Match me*//
 
       }
       else if (cmd == go_Backward) {
         Serial.println(cmd);
-        Backward();
-        recordings.write("1");  //*Match me*//
+        Backward(turnTime);
+        recordings.write('1');  //*Match me*//
       }
       else if (cmd == 4) {
-        recordings.close(); //close file after it's done; avoid re-entering Record function.
+        recordings.close(); //close file after it's done; avoid re-entering Record() function.
         Serial.println("DONE RECORDING!");
       }
     }
@@ -174,25 +209,24 @@ void Analyze() {
     Serial.println(numcmds);
     //size and populate the direction and distance arrays with raw data
     int cmd_list[numcmds] {};
-    int dist_list[numcmds] {};
-    uint8_t counter = 0;
-
-    analysis = SD.open("record.txt", FILE_READ);    //reopen this file for further processing
+    int dura_list[numcmds] {};
+    uint8_t counter{0};
+    //reopen this file for further processing
+    analysis = SD.open("record.txt", FILE_READ);
     if (analysis) {
       Serial.println("Stuffing arrays...");
 
       while ((cmds = analysis.read()) != -1) {
         cmd_list[counter] = cmds - '0';
-        //Serial.print(cmd_list[counter]);
-        dist_list[counter] = turnTime;
-        //Serial.println(dist_list[counter]);
+        dura_list[counter] = 1; //this is essentially a multiplier, which will multiply turnTime later
         counter += 1;
       }
     }
     analysis.close();//done with file record.txt
 
 
-    //changing the recorded values to +1(Forward),-1(Backward),+2(Left),-2(Right) to match my C++ code
+    //changing the recorded values to +1(Forward),-1(Backward),+2(Left),-2(Right)
+    //to recognize "opposite" direction commands
     for (int i = 0; i < counter; i++) {
       if (cmd_list[i] == go_Forward) {
         cmd_list[i] = +1;
@@ -212,85 +246,137 @@ void Analyze() {
     Serial.println("Optimizing......");
     bool finish{false};
     while (!finish) {
+      //Same-direction optimization
+
       for (int i = 0; i < counter - 1; ++i) {
         if (cmd_list[i] == cmd_list[i + 1] && cmd_list[i] != 0) {
           finish = false;
           cmd_list[i + 1] = 0;
-          dist_list[i] += dist_list[i + 1];
-          dist_list[i + 1] = 0;
+          dura_list[i] += dura_list[i + 1];
+          dura_list[i + 1] = 0;
           pushZerosToEnd(cmd_list, counter);
-          pushZerosToEnd(dist_list, counter);
+          pushZerosToEnd(dura_list, counter);
           i--;
         }
         else {
           finish = true;
         }
       }
+      //Opposite-direction optimization
       for (int j = 0; j < counter - 1; ++j) {
         while (cmd_list[j] == -cmd_list[j + 1] && cmd_list[j] != 0) {
           finish = false;
-          if (dist_list[j] > dist_list[j + 1]) {
-            dist_list[j] = dist_list[j] - dist_list[j + 1];
+          if (dura_list[j] > dura_list[j + 1]) {
+            dura_list[j] = dura_list[j] - dura_list[j + 1];
             cmd_list[j + 1] = 0;
-            dist_list[j + 1] = 0;
+            dura_list[j + 1] = 0;
             pushZerosToEnd(cmd_list, counter);
-            pushZerosToEnd(dist_list, counter);
+            pushZerosToEnd(dura_list, counter);
             j--;
           }
-          else if (dist_list[j] < dist_list[j + 1]) {
-            dist_list[j + 1] = dist_list[j + 1] - dist_list[j];
+          else if (dura_list[j] < dura_list[j + 1]) {
+            dura_list[j + 1] = dura_list[j + 1] - dura_list[j];
             cmd_list[j] = 0;
-            dist_list[j] = 0;
+            dura_list[j] = 0;
             pushZerosToEnd(cmd_list, counter);
-            pushZerosToEnd(dist_list, counter);
+            pushZerosToEnd(dura_list, counter);
             j--;
           }
-          else if (dist_list[j] == dist_list[j + 1]) {
+          else if (dura_list[j] == dura_list[j + 1]) {
             cmd_list[j] = 0;
             cmd_list[j + 1] = 0;
-            dist_list[j] = 0;
-            dist_list[j + 1] = 0;
+            dura_list[j] = 0;
+            dura_list[j + 1] = 0;
             pushZerosToEnd(cmd_list, counter);
-            pushZerosToEnd(dist_list, counter);
+            pushZerosToEnd(dura_list, counter);
             j--;
           }
 
         }
         //else {
-          finish = true;
-       // }
+        finish = true;
+        // }
       }
       if (counter == 1) {
         finish = true;
       }
     }
-    //xxxxxxxxxxxxxxxxxxxxx//
+    //End of Optimization//
+
+    //converting the direction commands back to original in order to write again
+    for (int k = 0; k < counter; k++) {
+      if (cmd_list[k] == +1) {
+        cmd_list[k] = 5;//*Match me*//
+      }
+      else if (cmd_list[k] == -1) {
+        cmd_list[k] = 1;//*Match me*//
+      }
+      else if (cmd_list[k] == +2) {
+        cmd_list[k] = 3;//*Match me*//
+      }
+      else if (cmd_list[k] == -2) {
+        cmd_list[k] = 7;//*Match me*//
+      }
+    }
 
     analysis = SD.open("analysis.txt", FILE_WRITE);
-    if (analysis) {
+    if (analysis && !analyzed) {
       Serial.println("WRITING analysis.txt....");
       for (int i = 0; i < numcmds && cmd_list[i] != 0; i++) {
+        //write an cmd_list item followed immediately by its value
+        //ignoring 0 values
         analysis.print(cmd_list[i]);
-        analysis.print("   "); //for debugging
-        analysis.println(dist_list[i]);
+        analysis.print(',');
+        analysis.println(dura_list[i]);
       }
       analysis.close();
       Serial.println("DONE!");
-      overall = false;
-      delay(10000);
+      analyzed = true;
+      delay(1000);
     }
   }
 }
 
+void Execute() {
+  //modified from File_Read Arduino code//
+  int x, y;
+  execute = SD.open("analysis.txt", FILE_READ);
+  if (execute) {
+    while (readVals(&x, &y)) {
+      if (x == go_Forward) {
+        Serial.print("Forward for ");
+        Serial.println(y * turnTime);
+        Forward(y * turnTime);
+      }
+      else if (x == go_Backward) {
 
+        Serial.print("Backward for ");
+        Serial.println(y * turnTime);
+        Backward(y * turnTime);
+      }
+      else if (x == go_Left) {
 
-
+        Serial.print("Left for ");
+        Serial.println(y * turnTime);
+        Left(y * turnTime);
+      }
+      else if (x == go_Right) {
+        Serial.print("Right for ");
+        Serial.println(y * turnTime);
+        Right(y * turnTime);
+      }
+    }
+  }
+  execute.close();
+  Serial.println("DONE!!");
+}
 
 void loop() {
-  while (overall) {
+  while (!analyzed) {
     Record();
     Analyze();
   }
+  Execute();
   Serial.println(".................end of line.................");
   delay(5000);
 
