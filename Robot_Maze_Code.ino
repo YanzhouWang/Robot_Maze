@@ -15,13 +15,14 @@ const unsigned char motor1F = 3;
 const unsigned char motor1B = 5;
 const unsigned char motor2F = 6;
 const unsigned char motor2B = 9;
-const unsigned char speed = 255;
-int turnTime = 1000; //motor turning time; subject to wheel specifications
+const unsigned char speed = 100;
+int turnTime = 350; //motor turning time; subject to wheel specifications
 //direction signals, depending on the controller setting
-const unsigned char go_Forward = 5;
-const unsigned char go_Backward = 1;
-const unsigned char go_Left = 3;
-const unsigned char go_Right = 7;
+const unsigned char go_Forward = 1;
+const unsigned char go_Backward = 4;
+const unsigned char go_Left = 2;
+const unsigned char go_Right = 3;
+const unsigned char go_Stop = 6;
 
 bool analyzed = false; //don't re-analyze previously analyzed data
 
@@ -164,26 +165,26 @@ void Record() {
       if (cmd == go_Forward) {
         Serial.println(cmd);
         Forward(turnTime);
-        recordings.write('5');  //*Match me*//
+        recordings.write('1');  //*Match me*//
       }
       else if (cmd == go_Left) {
         Serial.println(cmd);
         Left(turnTime);
-        recordings.write('3');  //*Match me*//
+        recordings.write('2');  //*Match me*//
 
       }
       else if (cmd == go_Right) {
         Serial.println(cmd);
         Right(turnTime);
-        recordings.write('7');  //*Match me*//
+        recordings.write('3');  //*Match me*//
 
       }
       else if (cmd == go_Backward) {
         Serial.println(cmd);
         Backward(turnTime);
-        recordings.write('1');  //*Match me*//
+        recordings.write('4');  //*Match me*//
       }
-      else if (cmd == 4) {
+      else if (cmd == go_Stop) {
         recordings.close(); //close file after it's done; avoid re-entering Record() function.
         Serial.println(F("DONE RECORDING!"));
       }
@@ -305,16 +306,16 @@ void Analyze() {
     //converting the direction commands back to original in order to write again
     for (int k = 0; k < counter; k++) {
       if (cmd_list[k] == +1) {
-        cmd_list[k] = 5;//*Match me*//
-      }
-      else if (cmd_list[k] == -1) {
         cmd_list[k] = 1;//*Match me*//
       }
+      else if (cmd_list[k] == -1) {
+        cmd_list[k] = 4;//*Match me*//
+      }
       else if (cmd_list[k] == +2) {
-        cmd_list[k] = 3;//*Match me*//
+        cmd_list[k] = 2;//*Match me*//
       }
       else if (cmd_list[k] == -2) {
-        cmd_list[k] = 7;//*Match me*//
+        cmd_list[k] = 3;//*Match me*//
       }
     }
 
