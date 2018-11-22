@@ -16,7 +16,7 @@ const unsigned char motor1B = 5;
 const unsigned char motor2F = 6;
 const unsigned char motor2B = 9;
 const unsigned char speed = 100;
-int turnTime = 350; //motor turning time; subject to wheel specifications
+unsigned int turnTime = 200; //motor turning time; subject to wheel specifications
 //direction signals, depending on the controller setting
 const unsigned char go_Forward = 1;
 const unsigned char go_Backward = 4;
@@ -24,7 +24,12 @@ const unsigned char go_Left = 2;
 const unsigned char go_Right = 3;
 const unsigned char go_Stop = 6;
 
+//unsigned long previous_Millis = 0; //initialize timer initial state
+//unsigned long current_Millis = millis(); //initialize timer current state
+//const unsigned char interval = 50; //set checking interval in millisecond
+
 bool analyzed = false; //don't re-analyze previously analyzed data
+const double modifier = 16 / 26.5; //modifier to correct the discrepancy between first run and recorded run due to acceleration and friction
 
 void setup() {
   Serial.begin(9600); // opens serial port, sets data rate to 9600 bps
@@ -97,9 +102,11 @@ bool readVals(unsigned char* v1, unsigned char* v2) {
 
 //Function ends
 
+
+//Move functions
 void Forward(unsigned int duration) {
   analogWrite(motor1F, speed);
-  analogWrite(motor2F, speed);
+  analogWrite(motor2F, speed + 1);
   delay(duration);
   analogWrite(motor1F, LOW);
   analogWrite(motor2F, LOW);
@@ -108,7 +115,7 @@ void Forward(unsigned int duration) {
 
 void Backward(unsigned int duration) {
   analogWrite(motor1B, speed);
-  analogWrite(motor2B, speed);
+  analogWrite(motor2B, speed + 1);
   delay(duration);
   analogWrite(motor1B, LOW);
   analogWrite(motor2B, LOW);
@@ -117,7 +124,7 @@ void Backward(unsigned int duration) {
 
 void Left(unsigned int duration) {
   analogWrite(motor1F, speed);
-  analogWrite(motor2B, speed);
+  analogWrite(motor2B, speed + 1);
   delay(duration);
   analogWrite(motor1F, LOW);
   analogWrite(motor2B, LOW);
@@ -126,7 +133,7 @@ void Left(unsigned int duration) {
 
 void Right(unsigned int duration) {
   analogWrite(motor1B, speed);
-  analogWrite(motor2F, speed);
+  analogWrite(motor2F, speed + 1);
   delay(duration);
   analogWrite(motor1B, LOW);
   analogWrite(motor2F, LOW);
@@ -346,24 +353,24 @@ void Execute() {
       if (x == go_Forward) {
         Serial.print(F("Forward for "));
         Serial.println(y * turnTime);
-        Forward(y * turnTime);
+        Forward(y * turnTime * modifier);
       }
       else if (x == go_Backward) {
 
         Serial.print(F("Backward for "));
         Serial.println(y * turnTime);
-        Backward(y * turnTime);
+        Backward(y * turnTime * modifier);
       }
       else if (x == go_Left) {
 
         Serial.print(F("Left for "));
         Serial.println(y * turnTime);
-        Left(y * turnTime);
+        Left(y * turnTime * modifier);
       }
       else if (x == go_Right) {
         Serial.print(F("Right for "));
         Serial.println(y * turnTime);
-        Right(y * turnTime);
+        Right(y * turnTime * modifier);
       }
     }
   }
@@ -375,9 +382,10 @@ void loop() {
   while (!analyzed) {
     Record();
     Analyze();
+    delay(10000);
   }
   Execute();
   Serial.println(F(".................end of line................."));
-  delay(5000);
+  delay(10000);
 
 }
