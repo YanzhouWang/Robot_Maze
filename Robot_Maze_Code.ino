@@ -24,12 +24,8 @@ const unsigned char go_Left = 2;
 const unsigned char go_Right = 3;
 const unsigned char go_Stop = 6;
 
-//unsigned long previous_Millis = 0; //initialize timer initial state
-//unsigned long current_Millis = millis(); //initialize timer current state
-//const unsigned char interval = 50; //set checking interval in millisecond
-
 bool analyzed = false; //don't re-analyze previously analyzed data
-const double modifier = 16 / 26.5; //modifier to correct the discrepancy between first run and recorded run due to acceleration and friction
+const double modifier = 16 / 26.6; //modifier to correct the discrepancy between first run and recorded run due to acceleration and friction
 
 void setup() {
   Serial.begin(9600); // opens serial port, sets data rate to 9600 bps
@@ -104,7 +100,7 @@ bool readVals(unsigned char* v1, unsigned char* v2) {
 
 
 //Move functions
-void Forward(unsigned int duration) {
+void Forward(double duration) {
   analogWrite(motor1F, speed);
   analogWrite(motor2F, speed + 1);
   delay(duration);
@@ -113,7 +109,7 @@ void Forward(unsigned int duration) {
   delay(500);
 }
 
-void Backward(unsigned int duration) {
+void Backward(double duration) {
   analogWrite(motor1B, speed);
   analogWrite(motor2B, speed + 1);
   delay(duration);
@@ -122,7 +118,7 @@ void Backward(unsigned int duration) {
   delay(500);
 }
 
-void Left(unsigned int duration) {
+void Left(double duration) {
   analogWrite(motor1F, speed);
   analogWrite(motor2B, speed + 1);
   delay(duration);
@@ -131,7 +127,7 @@ void Left(unsigned int duration) {
   delay(500);
 }
 
-void Right(unsigned int duration) {
+void Right(double duration) {
   analogWrite(motor1B, speed);
   analogWrite(motor2F, speed + 1);
   delay(duration);

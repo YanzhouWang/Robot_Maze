@@ -1,12 +1,3 @@
-// whenever index finger flexes the flex sensor, Xbee will send the value 2 to the robot, which means "turn left", 
-// when the middle finger flexes the second flex sensor, Xbee will send the value 3, which means "turn right"  
-// when both of the sensors are flexed, it will send the value 4 which means "go back" 
-// utility and go button will be present. Go button indicated the robot to go forward without any turns. it will send the value of 1 through Xbee. 
-// utility button will send the value of 6 
-
-//test code without Xbee
-
-
 #include <XBee.h>
 //set "xbee" as a XBee module
 XBee xbee = XBee();
@@ -31,8 +22,8 @@ int Gowrite = 0;
 int Utwrite = 0;
 
 
-int threshold = 35;
-
+int thresholdi = 870;
+int thresholdm = 970;
 
 
 int Xbeepackage =0;
@@ -67,12 +58,12 @@ else {Utwrite =0;}
 
 
 
- // Mapping all the sensor values down between 0-9. (0 = full bent, 9 = unbent)
-  int flex_1_0to100 = map(flexS1, 700, 400, 50, 0);
-  int flex_2_0to100 = map(flexS2, 700, 400, 50, 0);
+ // Mapping all the sensor values down between 0-1000
+  int flex_1_0to100 = map(flexS1, 1000, 0, 0, 1000);
+  int flex_2_0to100 = map(flexS2, 1000, 0, 0, 1000);
 
 //flex sensor 1 and 2 are both above threshold, then it signals go back words  
-  if (flex_1_0to100 > threshold && flex_2_0to100 > threshold) {
+  if (flex_1_0to100 > thresholdi && flex_2_0to100 > thresholdm) {
   Xbeepackage = 4;
    digitalWrite(ledPin,LOW);
   payload[0] = Xbeepackage;
@@ -82,7 +73,7 @@ else {Utwrite =0;}
 Serial.print(Xbeepackage);
 }
 // only index finger flex sensor is above threshold, turn left 
-  else if (flex_1_0to100 > threshold && flex_2_0to100 < threshold) {
+  else if (flex_1_0to100 > thresholdi && flex_2_0to100 < thresholdm) {
   Xbeepackage = 2;
    digitalWrite(ledPin,LOW);
   payload[0] = Xbeepackage;
@@ -92,7 +83,7 @@ Serial.print(Xbeepackage);
   Serial.print(Xbeepackage);
 }
 // only middle finger flex sensor is above threshold, turn right 
-  else if (flex_1_0to100 < threshold && flex_2_0to100 > threshold) {
+  else if (flex_1_0to100 < thresholdi && flex_2_0to100 > thresholdm) {
   Xbeepackage = 3;
    digitalWrite(ledPin,LOW);
   payload[0] = Xbeepackage;
