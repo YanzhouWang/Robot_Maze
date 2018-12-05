@@ -12,10 +12,10 @@ const unsigned char motor2F = 6;
 const unsigned char motor2B = 9;
 const unsigned char speed = 200;
 
-const unsigned char go_Forward = 7;
+const unsigned char go_Forward = 1;
 const unsigned char go_Backward = 3;
 const unsigned char go_Left = 5;
-const unsigned char go_Right = 1;
+const unsigned char go_Right = 7;
 const unsigned char go_Stop = 0;
 
 
